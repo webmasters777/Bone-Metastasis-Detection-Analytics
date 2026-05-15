@@ -41,6 +41,37 @@ def load_resnet50_model():
 resnet_model = load_resnet50_model()
 
 
+# Load EfficientNet-B3 model
+def load_efficientnet_b3_model():
+    model_path = os.path.join(os.path.dirname(__file__), "bone_scan_efficientnet_b3_final.pth")
+    try:
+        model = models.efficientnet_b3()
+        # build classifier to match training
+        in_features = model.classifier[1].in_features
+        model.classifier = nn.Sequential(
+            nn.Dropout(0.4),
+            nn.Linear(in_features, 256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 1),
+            nn.Sigmoid(),
+        )
+
+        if os.path.exists(model_path):
+            model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+            model.eval()
+            return model
+        else:
+            print("EfficientNet-B3 model not found. Please train it first using train_efficientnet_b3.py")
+            return None
+    except Exception as e:
+        print("Failed to load EfficientNet-B3 model:", e)
+        return None
+
+
+efficientnet_model = load_efficientnet_b3_model()
+
+
 def iter_image_files(folder_path):
     for root, _dirs, files in os.walk(folder_path):
         for name in sorted(files):
@@ -54,6 +85,96 @@ def load_image_bgr(image_path):
     if img_bgr is None:
         raise ValueError(f"Failed to read image: {image_path}")
     return img_bgr
+
+
+def classify_with_efficientnet_b3(img_bgr):
+    """Classify image using EfficientNet-B3 model. Returns dict with prediction and confidence."""
+    if efficientnet_model is None:
+        return {"prediction": -1, "confidence": 0.0, "class": "Unknown"}
+
+    # Preprocess
+    pil = Image.fromarray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
+    preprocess = transforms.Compose([
+        transforms.Resize((300, 300)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    tensor = preprocess(pil).unsqueeze(0)
+
+    with torch.no_grad():
+        out = efficientnet_model(tensor)
+        prob = float(out.squeeze().item())
+        pred = 1 if prob > 0.5 else 0
+
+    return {"prediction": pred, "probability": prob, "confidence": prob, "class": "Metastasis" if pred == 1 else "Normal"}
+
+
+def compute_saliency_map(model_name, img_bgr):
+    """Compute a simple gradient-based saliency map for ResNet50 or EfficientNet-B3.
+
+    Returns: heatmap as uint8 RGB image resized to original size.
+    """
+    if img_bgr is None:
+        return None
+
+    if model_name == 'ResNet50':
+        model = resnet_model
+        size = (224, 224)
+        preprocess = transforms.Compose([
+            transforms.Resize(size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    elif model_name == 'EfficientNet-B3':
+        model = efficientnet_model
+        size = (300, 300)
+        preprocess = transforms.Compose([
+            transforms.Resize(size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    else:
+        return None
+
+    if model is None:
+        return None
+
+    model.eval()
+
+    # Prepare tensor
+    img_pil = Image.fromarray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
+    input_tensor = preprocess(img_pil).unsqueeze(0)
+    input_tensor.requires_grad = True
+
+    device = torch.device('cpu')
+    model.to(device)
+    input_tensor = input_tensor.to(device)
+
+    # Forward
+    out = model(input_tensor).squeeze()
+    # For binary sigmoid, take scalar
+    score = out if out.dim() == 0 else out[0]
+
+    # Backward
+    model.zero_grad()
+    try:
+        score.backward(retain_graph=False)
+    except Exception:
+        return None
+
+    grad = input_tensor.grad.detach().cpu().numpy()[0]
+    # Aggregate across channels
+    saliency = np.abs(grad).sum(axis=0)
+    # Normalize
+    saliency = (saliency - saliency.min()) / (saliency.max() - saliency.min() + 1e-8)
+    saliency_uint8 = (saliency * 255).astype('uint8')
+
+    # Resize to original image size
+    heatmap = cv2.resize(saliency_uint8, (img_bgr.shape[1], img_bgr.shape[0]))
+    heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    overlay = cv2.addWeighted(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB), 0.6, heatmap_color, 0.4, 0)
+
+    return overlay
 
 
 def extract_metrics(img_bgr):
@@ -327,6 +448,17 @@ def load_dataset_labels(view_type="RANT"):
     return labels
 
 
+def resolve_view_types(view_type):
+    if isinstance(view_type, (list, tuple)):
+        return [str(v).strip().upper() for v in view_type]
+
+    view = str(view_type).strip().upper()
+    if view in ("BOTH", "COMBINED", "ALL"):
+        return ["RANT", "RPOST"]
+
+    return [view]
+
+
 def preprocess_for_resnet(img_bgr):
     """
     Preprocess image for ResNet50: convert to RGB, resize to 224x224, normalize.
@@ -421,59 +553,64 @@ def batch_classify_dataset(view_type="RANT", limit=0):
     Classify all images in dataset and evaluate performance.
     
     Args:
-        view_type: "RANT" for anterior or "RPOST" for posterior
+        view_type: "RANT", "RPOST", or "BOTH"/"COMBINED" for both views
         limit: 0 for all, or number to process
         
     Returns:
         dict: results with predictions, ground truth, and metrics
     """
-    image_dir = os.path.join(DATASET_PATH, f"chest{view_type}")
-    labels = load_dataset_labels(view_type)
-    
     predictions = []
     ground_truth = []
     results_data = []
-    
+
     count = 0
-    for filename in sorted(os.listdir(image_dir)):
-        if limit and count >= limit:
-            break
-            
-        if not filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+    for view in resolve_view_types(view_type):
+        image_dir = os.path.join(DATASET_PATH, f"chest{view}")
+        if not os.path.exists(image_dir):
             continue
-        
-        # Get ground truth
-        if filename not in labels:
-            continue
-        
-        true_label = labels[filename]
-        image_path = os.path.join(image_dir, filename)
-        
-        try:
-            # Process image
-            img_bgr = load_image_bgr(image_path)
-            
-            # Classify with ResNet50
-            classification = classify_with_resnet50(img_bgr)
-            
-            pred = classification["prediction"]
-            confidence = classification["confidence"]
-            
-            predictions.append(pred)
-            ground_truth.append(true_label)
-            
-            results_data.append({
-                "filename": filename,
-                "true_label": true_label,
-                "predicted": pred,
-                "classification": classification["class"],
-                "confidence": confidence,
-                "probability": classification["probability"]
-            })
-            
-            count += 1
-        except Exception as e:
-            continue
+
+        labels = load_dataset_labels(view)
+
+        for filename in sorted(os.listdir(image_dir)):
+            if limit and count >= limit:
+                break
+
+            if not filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                continue
+
+            # Get ground truth
+            if filename not in labels:
+                continue
+
+            true_label = labels[filename]
+            image_path = os.path.join(image_dir, filename)
+
+            try:
+                # Process image
+                img_bgr = load_image_bgr(image_path)
+
+                # Classify with ResNet50
+                classification = classify_with_resnet50(img_bgr)
+
+                pred = classification["prediction"]
+                confidence = classification["confidence"]
+
+                predictions.append(pred)
+                ground_truth.append(true_label)
+
+                results_data.append({
+                    "filename": filename,
+                    "true_label": true_label,
+                    "predicted": pred,
+                    "classification": classification["class"],
+                    "confidence": confidence,
+                    "probability": classification["probability"],
+                    "view_type": view,
+                })
+
+                count += 1
+            except Exception:
+                continue
     
     # Calculate performance
     performance = evaluate_classification_performance(predictions, ground_truth)
@@ -484,5 +621,6 @@ def batch_classify_dataset(view_type="RANT", limit=0):
         "results": results_data,
         "performance": performance,
         "total_images": count,
-        "view_type": view_type
+        "view_type": view_type,
+        "view_types": resolve_view_types(view_type)
     }

@@ -1,0 +1,107 @@
+{
+  "timestamp": "2026-05-15T23:47:00.069062",
+  "model": "EfficientNet-B3",
+  "dataset": {
+    "total": 5850,
+    "normal": 5512,
+    "metastasis": 338,
+    "per_view": {
+      "RANT": 2925,
+      "RPOST": 2925
+    }
+  },
+  "split": {
+    "train_size": 4680,
+    "test_size": 1170,
+    "test_fraction": 0.2
+  },
+  "training": {
+    "epochs": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "final_train_loss": 0.102510737544466,
+    "final_val_loss": 0.1495341706959644,
+    "best_val_accuracy": 0.9598290598290597
+  },
+  "performance_test": {
+    "sensitivity": 0.38235294117647056,
+    "specificity": 0.9954627949183303,
+    "accuracy": 0.9598290598290599,
+    "precision": 0.8387096774193549,
+    "f1_score": 0.5252525252525252,
+    "true_positives": 26,
+    "true_negatives": 1097,
+    "false_positives": 5,
+    "false_negatives": 42
+  },
+  "performance_full": {
+    "sensitivity": 0.5710059171597633,
+    "specificity": 0.9934687953555879,
+    "accuracy": 0.969059829059829,
+    "precision": 0.8427947598253275,
+    "f1_score": 0.6807760141093474,
+    "true_positives": 193,
+    "true_negatives": 5476,
+    "false_positives": 36,
+    "false_negatives": 145
+  },
+  "confusion_matrix_test": [
+    [
+      1097,
+      5
+    ],
+    [
+      42,
+      26
+    ]
+  ],
+  "classification_report_test": {
+    "Normal": {
+      "precision": 0.9631255487269534,
+      "recall": 0.9954627949183303,
+      "f1-score": 0.9790272199910754,
+      "support": 1102.0
+    },
+    "Metastasis": {
+      "precision": 0.8387096774193549,
+      "recall": 0.38235294117647056,
+      "f1-score": 0.5252525252525253,
+      "support": 68.0
+    },
+    "accuracy": 0.9598290598290599,
+    "macro avg": {
+      "precision": 0.9009176130731542,
+      "recall": 0.6889078680474005,
+      "f1-score": 0.7521398726218004,
+      "support": 1170.0
+    },
+    "weighted avg": {
+      "precision": 0.9558945408218964,
+      "recall": 0.9598290598290599,
+      "f1-score": 0.9526539898695189,
+      "support": 1170.0
+    }
+  },
+  "weights": {
+    "path": "C:\\Users\\sohai\\Downloads\\Assignments 6th RIS\\dip theory\\AIML Project\\bone_scan_efficientnet_b3_final.pth"
+  }
+}

@@ -4,6 +4,7 @@ ResNet50 Training Script for Bone Metastasis Detection using PyTorch.
 Trains a fine-tuned ResNet50 model on the bone scan dataset.
 """
 
+import argparse
 import os
 import numpy as np
 import torch
@@ -17,11 +18,12 @@ import cv2
 from PIL import Image
 
 # Dataset path
-DATASET_PATH = "dataset project"
+BASE_DIR = os.path.dirname(__file__)
+DATASET_PATH = os.path.join(BASE_DIR, "dataset project")
 
-def load_dataset_labels(view_type="RANT"):
+def load_dataset_labels(view_type="RANT", dataset_path=DATASET_PATH):
     """Load labels from the dataset text file."""
-    labels_file = os.path.join(DATASET_PATH, f"chest{view_type}", f"chest{view_type}.txt")
+    labels_file = os.path.join(dataset_path, f"chest{view_type}", f"chest{view_type}.txt")
     labels_dict = {}
     
     with open(labels_file, 'r') as f:
@@ -32,6 +34,44 @@ def load_dataset_labels(view_type="RANT"):
                 labels_dict[filename] = int(label)
     
     return labels_dict
+
+
+def normalize_view_types(view_types):
+    normalized = []
+    for view in view_types:
+        upper = view.strip().upper()
+        if upper not in ("RANT", "RPOST"):
+            raise ValueError(f"Unsupported view type: {view}")
+        normalized.append(upper)
+    return normalized
+
+
+def collect_dataset_samples(view_types, dataset_path=DATASET_PATH):
+    image_paths = []
+    labels = []
+    per_view_counts = {}
+
+    for view in normalize_view_types(view_types):
+        image_dir = os.path.join(dataset_path, f"chest{view}")
+        if not os.path.exists(image_dir):
+            raise FileNotFoundError(f"Dataset folder not found: {image_dir}")
+
+        labels_dict = load_dataset_labels(view_type=view, dataset_path=dataset_path)
+        view_count = 0
+
+        for filename in sorted(os.listdir(image_dir)):
+            if not filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                continue
+            if filename not in labels_dict:
+                continue
+
+            image_paths.append(os.path.join(image_dir, filename))
+            labels.append(labels_dict[filename])
+            view_count += 1
+
+        per_view_counts[view] = view_count
+
+    return image_paths, labels, per_view_counts
 
 class BoneScanDataset(Dataset):
     """Custom dataset for bone scan images."""
@@ -82,26 +122,19 @@ def create_resnet50_model():
     
     return model
 
-def train_resnet50():
+def train_resnet50(view_types, num_epochs, dataset_path=DATASET_PATH):
     """Train ResNet50 model."""
     print("Loading dataset...")
-    
+
     # Get all image paths and labels
-    image_dir = os.path.join(DATASET_PATH, "chestRANT")
-    labels_dict = load_dataset_labels(view_type="RANT")
-    
-    image_paths = []
-    labels = []
-    for filename in sorted(os.listdir(image_dir)):
-        if not filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-            continue
-        if filename not in labels_dict:
-            continue
-        image_paths.append(os.path.join(image_dir, filename))
-        labels.append(labels_dict[filename])
-    
+    image_paths, labels, per_view_counts = collect_dataset_samples(view_types, dataset_path)
+
+    labels_array = np.array(labels)
     print(f"Dataset loaded: {len(image_paths)} samples")
-    print(f"Normal: {np.sum(np.array(labels)==0)}, Metastasis: {np.sum(np.array(labels)==1)}")
+    print("Per-view counts:")
+    for view, count in per_view_counts.items():
+        print(f"  {view}: {count}")
+    print(f"Normal: {np.sum(labels_array == 0)}, Metastasis: {np.sum(labels_array == 1)}")
     
     # Split dataset
     X_train_paths, X_test_paths, y_train, y_test = train_test_split(
@@ -142,7 +175,7 @@ def train_resnet50():
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     
     # Training loop
-    num_epochs = 20
+    num_epochs = int(num_epochs)
     best_accuracy = 0.0
     
     print("Training ResNet50...")
@@ -213,5 +246,28 @@ def train_resnet50():
     
     return model
 
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train ResNet50 on bone scan datasets.")
+    parser.add_argument(
+        "--views",
+        nargs="+",
+        default=["RANT", "RPOST"],
+        help="Dataset views to include: RANT RPOST (default: both)",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=20,
+        help="Number of training epochs (default: 20)",
+    )
+    parser.add_argument(
+        "--dataset-path",
+        default=DATASET_PATH,
+        help="Path to dataset root (default: dataset project)",
+    )
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    train_resnet50()
+    args = parse_args()
+    train_resnet50(args.views, args.epochs, args.dataset_path)

@@ -34,9 +34,7 @@
       <div class="input-block">
         <label>Dataset</label>
         <select id="dataset-select">
-          <option value="chestRANT" selected>chestRANT</option>
-          <option value="chestRPOST">chestRPOST</option>
-          <option value="custom">Custom upload</option>
+          <option value="combined" selected>RANT + RPOST (Combined)</option>
         </select>
       </div>
 
@@ -122,9 +120,9 @@
     let activeObjectUrl = null;
 
     const datasetConfig = {
-      chestRANT: {
+      combined: {
         image: "outputs/previews/chestRANT_1.png",
-        title: "chestRANT_1.png",
+        title: "combined_preview.png",
         metrics: {
           contrast: "104.0952",
           energy: "0.1890",
@@ -133,19 +131,6 @@
           std: "36.95",
           median: "39.00",
           otsu: "58",
-        },
-      },
-      chestRPOST: {
-        image: "outputs/previews/chestRPOST_1.png",
-        title: "chestRPOST_1.png",
-        metrics: {
-          contrast: "201.0098",
-          energy: "0.1974",
-          homogeneity: "0.3552",
-          mean: "62.20",
-          std: "49.21",
-          median: "57.00",
-          otsu: "65",
         },
       },
     };
@@ -224,7 +209,6 @@
       activeObjectUrl = URL.createObjectURL(file);
       setPreview(activeObjectUrl, file.name, file.name);
       fileName.textContent = file.name;
-      datasetSelect.value = "custom";
       setMetrics(null);
     });
 

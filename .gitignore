@@ -4,3 +4,40 @@ __pycache__/
 .env
 outputs/
 .DS_Store
+
+# Python
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv*/
+env/
+venv/
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Data and outputs
+dataset project/
+dattaa/
+results.csv/
+batch_results.csv/
+
+# Model checkpoints
+*.pth
+*.pt
+
+# Logs
+*.log
+
+# Streamlit cache
+.streamlit/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+*.sqlite
