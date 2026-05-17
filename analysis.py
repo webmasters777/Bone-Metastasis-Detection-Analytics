@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 
 import cv2
 import matplotlib.pyplot as plt
@@ -9,15 +10,24 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 from PIL import Image
+import requests
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 # Dataset path
 DATASET_PATH = os.path.join(os.path.dirname(__file__), "dataset project")
 
-# Load ResNet50 model
+@lru_cache(maxsize=1)
 def load_resnet50_model():
     model_path = os.path.join(os.path.dirname(__file__), "bone_scan_resnet50_final.pth")
+    # If a download URL is provided via env var, try to fetch weights when missing
+    resnet_url = os.environ.get("RESNET_WEIGHTS_URL")
+    if resnet_url and not os.path.exists(model_path):
+        try:
+            download_file(resnet_url, model_path)
+        except Exception as _:
+            pass
+
     if os.path.exists(model_path):
         model = models.resnet50()
         num_features = model.fc.in_features
@@ -31,20 +41,26 @@ def load_resnet50_model():
             nn.Linear(256, 1),
             nn.Sigmoid()
         )
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
         model.eval()
         return model
     else:
         print("ResNet50 model not found. Please train it first using train_resnet50.py")
         return None
 
-resnet_model = load_resnet50_model()
-
-
 # Load EfficientNet-B3 model
+@lru_cache(maxsize=1)
 def load_efficientnet_b3_model():
     model_path = os.path.join(os.path.dirname(__file__), "bone_scan_efficientnet_b3_final.pth")
     try:
+        # If a download URL is provided via env var, try to fetch weights when missing
+        eff_url = os.environ.get("EFFICIENTNET_B3_WEIGHTS_URL")
+        if eff_url and not os.path.exists(model_path):
+            try:
+                download_file(eff_url, model_path)
+            except Exception:
+                pass
+
         model = models.efficientnet_b3()
         # build classifier to match training
         in_features = model.classifier[1].in_features
@@ -69,7 +85,19 @@ def load_efficientnet_b3_model():
         return None
 
 
-efficientnet_model = load_efficientnet_b3_model()
+def download_file(url, dest_path, chunk_size=1 << 20):
+    """Download a file from `url` to `dest_path` streaming in chunks.
+
+    Raises an exception on non-200 response.
+    """
+    resp = requests.get(url, stream=True, timeout=30)
+    resp.raise_for_status()
+    tmp_path = dest_path + ".part"
+    with open(tmp_path, "wb") as out:
+        for chunk in resp.iter_content(chunk_size=chunk_size):
+            if chunk:
+                out.write(chunk)
+    os.replace(tmp_path, dest_path)
 
 
 def iter_image_files(folder_path):
@@ -89,6 +117,7 @@ def load_image_bgr(image_path):
 
 def classify_with_efficientnet_b3(img_bgr):
     """Classify image using EfficientNet-B3 model. Returns dict with prediction and confidence."""
+    efficientnet_model = load_efficientnet_b3_model()
     if efficientnet_model is None:
         return {"prediction": -1, "confidence": 0.0, "class": "Unknown"}
 
@@ -118,7 +147,7 @@ def compute_saliency_map(model_name, img_bgr):
         return None
 
     if model_name == 'ResNet50':
-        model = resnet_model
+        model = load_resnet50_model()
         size = (224, 224)
         preprocess = transforms.Compose([
             transforms.Resize(size),
@@ -126,7 +155,7 @@ def compute_saliency_map(model_name, img_bgr):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
     elif model_name == 'EfficientNet-B3':
-        model = efficientnet_model
+        model = load_efficientnet_b3_model()
         size = (300, 300)
         preprocess = transforms.Compose([
             transforms.Resize(size),
@@ -485,6 +514,7 @@ def classify_with_resnet50(img_bgr):
     Classify image using ResNet50 model.
     Returns: {'prediction': 0 or 1, 'confidence': float, 'class': str}
     """
+    resnet_model = load_resnet50_model()
     if resnet_model is None:
         return {"prediction": -1, "confidence": 0.0, "class": "Model not loaded"}
     

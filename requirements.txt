@@ -11,3 +11,4 @@ pillow
 seaborn
 plotly
 pandas
+requests

@@ -59,7 +59,7 @@ TRAINING_VAL_ACCURACY = [
 
 EFFICIENTNET_RESULTS_PATH = "efficientnet_b3_results.json"
 EFFICIENTNET_TRAINING_PATH = "efficientnet_b3_training.json"
-RESNET_RESULTS_PATH = "resnet50_results.json"
+RESNET_RESULTS_PATH = "classification_results_full.json"
 RESNET_TRAINING_PATH = "resnet50_training.json"
 
 RESNET_TRAINING_SETTINGS = {
@@ -82,6 +82,13 @@ def load_json(path):
 def get_model_performance(results_data):
     if not results_data:
         return None
+
+    if isinstance(results_data, dict):
+        evaluation = results_data.get("evaluation")
+        if isinstance(evaluation, dict):
+            nested_performance = evaluation.get("performance")
+            if nested_performance:
+                return nested_performance
 
     return (
         results_data.get("performance_full")
@@ -128,6 +135,13 @@ def get_combined_results(limit=DEFAULT_EVAL_LIMIT):
 def extract_performance(results):
     if not results:
         return None
+
+    if isinstance(results, dict):
+        evaluation = results.get("evaluation")
+        if isinstance(evaluation, dict):
+            nested_performance = evaluation.get("performance")
+            if nested_performance:
+                return nested_performance
 
     predictions = results.get("predictions", [])
     if not predictions or any(pred == -1 for pred in predictions):
@@ -261,7 +275,7 @@ elif page == "AI/ML Project":
         dataset_stats = compute_dataset_stats()
         dataset_size = f"{dataset_stats['total']:,}" if dataset_stats else "2,925"
 
-        combined_results = get_combined_results()
+        combined_results = load_json(RESNET_RESULTS_PATH) or get_combined_results()
         combined_performance = extract_performance(combined_results)
 
         efficientnet_results = load_json(EFFICIENTNET_RESULTS_PATH)
