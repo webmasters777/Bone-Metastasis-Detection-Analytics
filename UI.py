@@ -713,33 +713,7 @@ elif page == "AI/ML Project":
                 fig_cm.update_layout(title=f"{title} - Confusion Matrix", height=350)
                 st.plotly_chart(fig_cm, use_container_width=True)
 
-                # ROC / PR if raw results available
-                if results and results.get('results'):
-                    y_true = [row.get('true_label', 0) for row in results['results']]
-                    y_scores = [row.get('probability', row.get('confidence', 0.0)) for row in results['results']]
-                    try:
-                        from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
-                        fpr_vals, tpr_vals, _ = roc_curve(y_true, y_scores)
-                        roc_auc = auc(fpr_vals, tpr_vals)
-                        precision_vals, recall_vals, _ = precision_recall_curve(y_true, y_scores)
-                        ap = average_precision_score(y_true, y_scores)
-
-                        fig_roc = go.Figure()
-                        fig_roc.add_trace(go.Scatter(x=fpr_vals, y=tpr_vals, mode='lines', name=f'ROC (AUC {roc_auc:.3f})'))
-                        fig_roc.add_trace(go.Scatter(x=[0,1], y=[0,1], mode='lines', name='Random', line=dict(dash='dash')))
-                        fig_roc.update_layout(title=f"{title} - ROC Curve", height=350)
-
-                        fig_pr = go.Figure()
-                        fig_pr.add_trace(go.Scatter(x=recall_vals, y=precision_vals, mode='lines', name=f'PR (AP {ap:.3f})'))
-                        fig_pr.update_layout(title=f"{title} - Precision-Recall", height=350)
-
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.plotly_chart(fig_roc, use_container_width=True)
-                        with col2:
-                            st.plotly_chart(fig_pr, use_container_width=True)
-                    except Exception:
-                        st.info("Unable to compute ROC/PR for this model.")
+                # ROC/PR charts removed
 
             # Render panels based on choice
             if model_view_choice == "ResNet50":
@@ -855,88 +829,7 @@ elif page == "AI/ML Project":
                 )
                 st.plotly_chart(fig_waterfall, use_container_width=True)
 
-            st.markdown("### 📈 ROC & Precision-Recall Analysis")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                # Compute actual ROC curve from results
-                if results.get('results'):
-                    y_true = [row.get('true_label', 0) for row in results['results']]
-                    y_scores = [row.get('confidence', 0.0) for row in results['results']]
-
-                    from sklearn.metrics import roc_curve, auc
-                    fpr, tpr, _ = roc_curve(y_true, y_scores)
-                    roc_auc = auc(fpr, tpr)
-
-                    fig_roc = go.Figure()
-                    fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, mode='lines',
-                                               name=f'ROC Curve (AUC = {roc_auc:.3f})', line=dict(color='#4CAF50', width=3)))
-                    fig_roc.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines',
-                                               name='Random Classifier', line=dict(color='#BDBDBD', dash='dash')))
-
-                    fig_roc.update_layout(
-                        title=f"ROC Curve (AUC = {roc_auc:.3f})",
-                        xaxis_title="False Positive Rate",
-                        yaxis_title="True Positive Rate",
-                        height=400
-                    )
-                    st.plotly_chart(fig_roc, use_container_width=True)
-                else:
-                    # Fallback to simulated
-                    fpr_points = np.array([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-                    tpr_points = np.array([0, 0.3, 0.5, 0.7, 0.8, 0.85, 0.9, 0.92, 0.95, 0.97, 1.0])
-
-                    fig_roc = go.Figure()
-                    fig_roc.add_trace(go.Scatter(x=fpr_points, y=tpr_points, mode='lines+markers',
-                                               name='ROC Curve', line=dict(color='#4CAF50', width=3)))
-                    fig_roc.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines',
-                                               name='Random Classifier', line=dict(color='#BDBDBD', dash='dash')))
-
-                    fig_roc.update_layout(
-                        title="ROC Curve (AUC = 0.94)",
-                        xaxis_title="False Positive Rate",
-                        yaxis_title="True Positive Rate",
-                        height=400
-                    )
-                    st.plotly_chart(fig_roc, use_container_width=True)
-
-            with col2:
-                if results.get('results'):
-                    y_true = [row.get('true_label', 0) for row in results['results']]
-                    y_scores = [row.get('confidence', 0.0) for row in results['results']]
-
-                    from sklearn.metrics import precision_recall_curve, average_precision_score
-                    precision, recall, _ = precision_recall_curve(y_true, y_scores)
-                    ap = average_precision_score(y_true, y_scores)
-
-                    fig_pr = go.Figure()
-                    fig_pr.add_trace(go.Scatter(x=recall, y=precision, mode='lines',
-                                              name=f'Precision-Recall Curve (AP = {ap:.3f})', line=dict(color='#2196F3', width=3)))
-
-                    fig_pr.update_layout(
-                        title=f"Precision-Recall Curve (AP = {ap:.3f})",
-                        xaxis_title="Recall",
-                        yaxis_title="Precision",
-                        height=400
-                    )
-                    st.plotly_chart(fig_pr, use_container_width=True)
-                else:
-                    # Fallback
-                    recall = np.array([1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5])
-                    precision_curve = np.array([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.82, 0.85, 0.87, 0.9])
-
-                    fig_pr = go.Figure()
-                    fig_pr.add_trace(go.Scatter(x=recall, y=precision_curve, mode='lines+markers',
-                                              name='Precision-Recall Curve', line=dict(color='#2196F3', width=3)))
-
-                    fig_pr.update_layout(
-                        title="Precision-Recall Curve (AP = 0.87)",
-                        xaxis_title="Recall",
-                        yaxis_title="Precision",
-                        height=400
-                    )
-                    st.plotly_chart(fig_pr, use_container_width=True)
+            # ROC & Precision-Recall charts removed
 
     elif dashboard_tab == "📈 Training Analytics":
         # Training Analytics Dashboard
