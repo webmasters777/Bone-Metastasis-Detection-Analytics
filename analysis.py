@@ -138,72 +138,8 @@ def classify_with_efficientnet_b3(img_bgr):
     return {"prediction": pred, "probability": prob, "confidence": prob, "class": "Metastasis" if pred == 1 else "Normal"}
 
 
-def compute_saliency_map(model_name, img_bgr):
-    """Compute a simple gradient-based saliency map for ResNet50 or EfficientNet-B3.
 
-    Returns: heatmap as uint8 RGB image resized to original size.
-    """
-    if img_bgr is None:
-        return None
 
-    if model_name == 'ResNet50':
-        model = load_resnet50_model()
-        size = (224, 224)
-        preprocess = transforms.Compose([
-            transforms.Resize(size),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-    elif model_name == 'EfficientNet-B3':
-        model = load_efficientnet_b3_model()
-        size = (300, 300)
-        preprocess = transforms.Compose([
-            transforms.Resize(size),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-    else:
-        return None
-
-    if model is None:
-        return None
-
-    model.eval()
-
-    # Prepare tensor
-    img_pil = Image.fromarray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
-    input_tensor = preprocess(img_pil).unsqueeze(0)
-    input_tensor.requires_grad = True
-
-    device = torch.device('cpu')
-    model.to(device)
-    input_tensor = input_tensor.to(device)
-
-    # Forward
-    out = model(input_tensor).squeeze()
-    # For binary sigmoid, take scalar
-    score = out if out.dim() == 0 else out[0]
-
-    # Backward
-    model.zero_grad()
-    try:
-        score.backward(retain_graph=False)
-    except Exception:
-        return None
-
-    grad = input_tensor.grad.detach().cpu().numpy()[0]
-    # Aggregate across channels
-    saliency = np.abs(grad).sum(axis=0)
-    # Normalize
-    saliency = (saliency - saliency.min()) / (saliency.max() - saliency.min() + 1e-8)
-    saliency_uint8 = (saliency * 255).astype('uint8')
-
-    # Resize to original image size
-    heatmap = cv2.resize(saliency_uint8, (img_bgr.shape[1], img_bgr.shape[0]))
-    heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-    overlay = cv2.addWeighted(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB), 0.6, heatmap_color, 0.4, 0)
-
-    return overlay
 
 
 def extract_metrics(img_bgr):

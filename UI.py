@@ -18,7 +18,6 @@ from analysis import (
     load_dataset_labels,
     classify_with_resnet50,
     classify_with_efficientnet_b3,
-    compute_saliency_map,
 )
 
 # Page configuration
@@ -265,7 +264,7 @@ elif page == "AI/ML Project":
     # Dashboard Navigation
     dashboard_tab = st.sidebar.radio(
         "Dashboard Sections",
-        ["📊 Overview", "🎯 Model Performance", "📈 Training Analytics", "🔍 Model Interpretability", "🧪 Live Testing"]
+        ["📊 Overview", "🎯 Model Performance", "📈 Training Analytics", "🧪 Live Testing"]
     )
 
     if dashboard_tab == "📊 Overview":
@@ -1198,157 +1197,7 @@ elif page == "AI/ML Project":
 
         st.plotly_chart(fig_evolution, use_container_width=True)
 
-    elif dashboard_tab == "🔍 Model Interpretability":
-        # Model Interpretability Dashboard
-        st.markdown("## 🔍 Model Interpretability & Explainability")
-
-        # Feature Importance Analysis
-        st.markdown("### 🧠 Feature Importance Analysis")
-
-        # Enhanced feature importance with more features
-        features_data = {
-            'Feature': ['Contrast', 'Energy', 'Homogeneity', 'Correlation', 'ASM', 'Variance',
-                       'Entropy', 'Mean Intensity', 'Std Deviation', 'Skewness', 'Kurtosis'],
-            'Importance': [0.25, 0.20, 0.18, 0.15, 0.12, 0.10, 0.08, 0.06, 0.04, 0.02, 0.01],
-            'Category': ['Texture', 'Texture', 'Texture', 'Texture', 'Texture', 'Texture',
-                        'Texture', 'Statistical', 'Statistical', 'Statistical', 'Statistical']
-        }
-
-        df_features = pd.DataFrame(features_data)
-
-        # Feature importance bar chart with categories
-        fig_features = px.bar(df_features, x='Feature', y='Importance', color='Category',
-                             color_discrete_map={'Texture': '#4CAF50', 'Statistical': '#2196F3'},
-                             title="Feature Importance by Category")
-        fig_features.update_layout(height=400)
-        st.plotly_chart(fig_features, use_container_width=True)
-
-        # Feature correlation heatmap
-        st.markdown("### 🔗 Feature Correlation Analysis")
-
-        # Simulated correlation matrix
-        correlation_data = np.random.uniform(-0.8, 0.8, (11, 11))
-        np.fill_diagonal(correlation_data, 1.0)  # Perfect correlation with itself
-
-        fig_corr = px.imshow(correlation_data,
-                           labels=dict(x="Features", y="Features", color="Correlation"),
-                           x=features_data['Feature'],
-                           y=features_data['Feature'],
-                           color_continuous_scale='RdBu_r',
-                           title="Feature Correlation Matrix")
-        fig_corr.update_layout(height=500)
-        st.plotly_chart(fig_corr, use_container_width=True)
-
-        # Sample Analysis Section
-        st.markdown("### 🔬 Sample Analysis")
-
-        # Load a sample image for analysis
-        sample_candidates = [
-            os.path.join("dattaa", "chestRANT", "100.jpg"),
-            os.path.join("dattaa", "chestRPOST", "100.jpg"),
-        ]
-        sample_image_path = next((path for path in sample_candidates if os.path.exists(path)), None)
-
-        if sample_image_path:
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("#### Original Image")
-                image = Image.open(sample_image_path)
-                st.image(image, caption="Sample Bone Scan Image", width=300)
-
-            with col2:
-                st.markdown("#### Model Interpretability")
-                model_choice_interp = st.selectbox("Select model for interpretability:", ["ResNet50", "EfficientNet-B3"], key="interp_model_choice")
-
-                img_bgr = cv2.imread(sample_image_path)
-                if img_bgr is not None:
-                    # Show model prediction
-                    if model_choice_interp == "ResNet50":
-                        result = classify_with_resnet50(img_bgr)
-                    else:
-                        result = classify_with_efficientnet_b3(img_bgr)
-
-                    pred = result.get('prediction', -1)
-                    conf = result.get('probability', result.get('confidence', 0.0))
-                    if pred == -1:
-                        st.warning("Selected model not loaded. Train or load the model to compute interpretability maps.")
-                    else:
-                        st.write(f"Prediction: **{result.get('class','Unknown')}** — Confidence: **{conf:.1%}**")
-
-                        # Compute saliency map
-                        saliency = compute_saliency_map(model_choice_interp, img_bgr)
-                        if saliency is not None:
-                            st.markdown("**Saliency Overlay**")
-                            # use_column_width deprecated; use explicit width instead
-                            st.image(saliency, width=400)
-                        else:
-                            st.info("Saliency map unavailable for the selected model.")
-
-                        # Show simple feature contribution bars (simulated but model-aware)
-                        if model_choice_interp == "ResNet50":
-                            contrib = {'Contrast':0.30, 'Energy':0.22, 'Homogeneity':0.18, 'Correlation':0.14, 'Entropy':0.06}
-                        else:
-                            contrib = {'Contrast':0.28, 'Energy':0.24, 'Homogeneity':0.16, 'Correlation':0.18, 'Entropy':0.07}
-
-                        df_contrib = pd.DataFrame({'Feature': list(contrib.keys()), 'Contribution': list(contrib.values())})
-                        fig_contrib = px.bar(df_contrib, x='Feature', y='Contribution', title=f"Feature Contributions ({model_choice_interp})", color='Feature')
-                        fig_contrib.update_layout(height=300, showlegend=False)
-                        st.plotly_chart(fig_contrib, use_container_width=True)
-                else:
-                    st.info("Sample image not found in the combined dataset.")
-
-        # Decision Boundary Analysis
-        st.markdown("### 🎯 Decision Boundary Analysis")
-
-        # Create enhanced scatter plot of prediction confidence with more samples
-        confidence_data = []
-        for i in range(200):  # More samples for better visualization
-            base_conf = np.random.uniform(0.0, 1.0)
-            if np.random.random() > 0.5:
-                confidence_data.append({
-                    'sample': f'Sample_{i+1}',
-                    'confidence': base_conf,
-                    'prediction': 'Metastasis' if base_conf > 0.5 else 'Normal',
-                    'true_label': 'Metastasis' if np.random.random() > 0.5 else 'Normal'
-                })
-
-        df_conf = pd.DataFrame(confidence_data)
-
-        # Create scatter plot with correct/incorrect coloring
-        df_conf['correct'] = df_conf['prediction'] == df_conf['true_label']
-
-        fig_scatter = px.scatter(df_conf, x='sample', y='confidence', color='correct',
-                                color_discrete_map={True: '#4CAF50', False: '#F44336'},
-                                title="Prediction Confidence Distribution with Accuracy")
-        fig_scatter.add_hline(y=0.5, line_dash="dash", line_color="red",
-                             annotation_text="Decision Threshold")
-        fig_scatter.update_layout(
-            xaxis_title="Sample",
-            yaxis_title="Confidence Score",
-            height=400,
-            showlegend=True
-        )
-        fig_scatter.update_xaxes(showticklabels=False)  # Hide x-axis labels for cleaner look
-        st.plotly_chart(fig_scatter, use_container_width=True)
-
-        # Feature Contribution Analysis
-        st.markdown("### 📊 Feature Contribution Analysis")
-
-        # Simulated feature contributions for a specific prediction
-        feature_contributions = {
-            'Feature': ['Contrast', 'Energy', 'Homogeneity', 'Correlation', 'ASM'],
-            'Contribution': [0.35, 0.25, 0.20, 0.15, 0.05],
-            'Direction': ['Positive', 'Positive', 'Negative', 'Negative', 'Positive']
-        }
-
-        df_contrib = pd.DataFrame(feature_contributions)
-
-        fig_contrib = px.bar(df_contrib, x='Feature', y='Contribution', color='Direction',
-                           color_discrete_map={'Positive': '#4CAF50', 'Negative': '#F44336'},
-                           title="Feature Contributions to Prediction")
-        fig_contrib.update_layout(height=400)
-        st.plotly_chart(fig_contrib, use_container_width=True)
+    # (Model Interpretability tab removed)
 
     elif dashboard_tab == "🧪 Live Testing":
         # Live Testing Dashboard
